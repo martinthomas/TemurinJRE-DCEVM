@@ -135,4 +135,5 @@ jobs:
             osx/${{ inputs.outputname }}
           body-path: info.txt
           title: New DCEVM build for OSX
+          branch: create-pull-request/patch-osx
           

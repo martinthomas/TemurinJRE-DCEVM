@@ -133,5 +133,6 @@ jobs:
             windows-x64/${{ inputs.outputname }}
           body-path: info.txt 
           title: New DCEVM build for Windows-x64
+          branch: create-pull-request/patch-win_x64
 
           
