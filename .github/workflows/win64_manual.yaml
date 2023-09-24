@@ -1,0 +1,137 @@
+name: Build DCEVM version of OpenJDK JRE for Windows-x64
+
+on:
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      outputname:
+        description: 'Output filename'
+        default: 'openjdk_jre_dcevm.zip'
+        required: false
+        type: string
+      jdk:
+        # Friendly description to be shown in the UI instead of 'name'
+        description: 'Temurin JDK'
+        # Default value if no value is explicitly provided
+        default: 'https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.20.1+1/OpenJDK11U-jdk_x64_windows_hotspot_11.0.20.1_1.zip'
+        # Input has to be provided for the workflow to run
+        required: true
+        # The data type of the input
+        type: string
+        
+      dcevm:
+        description: 'DCEVM JDK'
+        default: 'https://github.com/TravaOpenJDK/trava-jdk-11-dcevm/releases/download/dcevm-11.0.15+1/Openjdk11u-dcevm-windows-x64.zip'
+        required: true
+        type: string
+        
+      jre:
+        description: 'Temurin JRE'
+        default: 'https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.20.1+1/OpenJDK11U-jre_x64_windows_hotspot_11.0.20.1_1.zip'
+        required: true
+        type: string
+
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Confirm inputs
+      run: |
+        echo "Using ${{ inputs.jre }}"
+        echo "Using ${{ inputs.jdk }}"
+        echo "Using ${{ inputs.dcevm }}"
+        echo "Using ${{ inputs.outputname }}"
+      
+  get-zipfiles:
+    runs-on: ubuntu-latest
+    steps:    
+        # Checkout the branch first
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: wget dcevm
+        uses: wei/wget@v1
+        with:
+          args: -O dcevm.zip ${{ inputs.dcevm }}
+          
+      - name: wget openjdk
+        uses: wei/wget@v1
+        with:
+          args: -O jdk.zip ${{ inputs.jdk }}
+          
+      - name: wget openjre
+        uses: wei/wget@v1
+        with:
+          args: -O jre.zip ${{ inputs.jre }}          
+  
+      - name: ls
+        run: |
+          ls -asltr
+          
+      - name: unzip all
+        run: |
+          unzip -q dcevm.zip -d dcevm
+          unzip -q jdk.zip -d jdk
+          unzip -q jre.zip -d jre
+          
+      - name: list contents
+        run: |
+          ls -asltr
+          echo "dcevm" && ls -asl dcevm/
+          echo "jdk" && ls -asl jdk/
+          echo "jre" && ls -asl jre/
+          
+      - name: Copy files
+        run: |
+          # Copy {TravaJDK Directory}/bin/server/jvm.dll to {JRE Directory}/bin/server/jvm.dll
+          cp dcevm/*/bin/server/jvm.dll jre/*/bin/server/jvm.dll
+          # Copy {AdoptOpenJDK Directory}/lib/modules to {JRE Directory}/lib/modules
+          cp jdk/*/lib/modules  jre/*/lib/modules
+          echo "ls -asl " && ls -asl
+          mkdir -p windows-x64
+          zip -r windows-x64/${{ inputs.outputname }} jre/*
+          
+      - name: Commit message
+        run: |
+          echo "New DCEVM zipfile built from:" > info.txt
+          echo "JRE ${{ inputs.jre }}" >> info.txt
+          echo "JDK  ${{ inputs.jdk }}" >> info.txt
+          echo "DCEVM ${{ inputs.dcevm }}" >> info.txt
+          echo "Output ${{ inputs.outputname }}" >> info.txt
+          
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3.1.3
+        with:    # Artifact name
+          name: ${{ inputs.outputname }} 
+          path: windows-x64/${{ inputs.outputname }}
+        
+      - name: Upload Build info
+        uses: actions/upload-artifact@v3.1.3
+        with:
+          name: info.txt
+          path: info.txt
+    
+      - name: setup git config
+        run: |
+          # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
+      - name: commit
+        run: |
+          rm -fr dcevm jdk jre
+          rm -fr dcevm.zip jdk.zip jre.zip
+          # Stage the file, commit and push
+          git add windows-x64/${{ inputs.outputname }} 
+          git commit -m "New DCEVM build for Windows-x64"
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5          
+        with:
+          add-paths: | # specifically add this zip file
+            windows-x64/${{ inputs.outputname }}
+          body-path: info.txt 
+          title: New DCEVM build for Windows-x64
+
+          
